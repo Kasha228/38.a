@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSV Editor</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .table-container {
+            margin-top: 20px;
+            overflow-x: auto;
+        }
+        .editable:hover {
+            background-color: #f8f9fa;  
+            cursor: pointer;
+        }
+        .success-message {
+            display: none;
+            color: green;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1>CSV Editor</h1>
+        
+        <div class="mb-3">
+            <label for="fileSelect" class="form-label">Select File:</label>
+            <select id="fileSelect" class="form-select" style="width: 200px;">
+                <option value="1">File 1</option>
+                <option value="2">File 2</option>
+            </select>
+        </div>
+
+        <button id="saveBtn" class="btn btn-primary">Save Changes</button>
+        <a href="/visualization" class="btn btn-info">View 3D Visualization</a>
+        <div id="successMessage" class="success-message">Changes saved successfully!</div>
+        
+        <div id="table-container" class="table-container">
+            <table id="csvTable" class="table table-bordered">
+                <thead>
+                    <tr id="headerRow"></tr>
+                </thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        let currentData = [];
+        let columns = [];
+
+        function loadFile(fileIndex) {
+            fetch(`/load/${fileIndex}`)
+                .then(response => response.json())
+                .then(data => {
+                    currentData = data.data;
+                    columns = data.columns;
+                    updateTable();
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error loading file');
+                });
+        }
+
+        function updateTable() {
+            const headerRow = document.getElementById('headerRow');
+            headerRow.innerHTML = columns.map(col => `<th>${col}</th>`).join('');
+
+            const tableBody = document.getElementById('tableBody');
+            tableBody.innerHTML = currentData.map((row, rowIndex) => `
+                <tr>
+                    ${columns.map(col => `
+                        <td class="editable" 
+                            onclick="makeEditable(this)" 
+                            data-row="${rowIndex}" 
+                            data-col="${col}">
+                            ${row[col] || ''}
+                        </td>
+                    `).join('')}
+                </tr>
+            `).join('');
+        }
+
+        function makeEditable(cell) {
+            const value = cell.textContent.trim();
+            const rowIndex = cell.dataset.row;
+            const column = cell.dataset.col;
+            
+            cell.innerHTML = `
+                <input type="text" 
+                       value="${value}" 
+                       class="form-control"
+                       onblur="updateValue(this, ${rowIndex}, '${column}')"
+                       onkeypress="handleKeyPress(event, this)">
+            `;
+            cell.querySelector('input').focus();
+        }
+
+        function updateValue(input, rowIndex, column) {
+            const newValue = input.value;
+            currentData[rowIndex][column] = newValue;
+            input.parentElement.innerHTML = newValue;
+        }
+
+        function handleKeyPress(event, input) {
+            if (event.key === 'Enter') {
+                input.blur();
+            }
+        }
+
+        function showSuccessMessage() {
+            const message = document.getElementById('successMessage');
+            message.style.display = 'block';
+            setTimeout(() => {
+                message.style.display = 'none';
+            }, 3000);
+        }
+
+        document.getElementById('fileSelect').addEventListener('change', (e) => {
+            loadFile(e.target.value);
+        });
+
+        document.getElementById('saveBtn').addEventListener('click', () => {
+            const fileIndex = document.getElementById('fileSelect').value;
+            fetch(`/save/${fileIndex}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(currentData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                showSuccessMessage();
+                // Reload the data to ensure we're showing the latest version
+                loadFile(fileIndex);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error saving changes');
+            });
+        });
+
+        // Load initial file
+        loadFile(1);
+    </script>
+</body>
+</html>
